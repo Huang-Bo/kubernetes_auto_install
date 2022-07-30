@@ -1,0 +1,6 @@
+ - hosts: k8s_slave
+   tasks:
+     - name: 17- start haproxy.
+       script: "/kubernetes_auto_install/k8s-master/haproxy-k8s-master/start-haproxy.sh"
+     - name: 18- start keepalived.
+       script: "/kubernetes_auto_install/k8s-master/keepalived-k8s-master/start-keepalived.sh"

@@ -1,0 +1,60 @@
+---
+  - hosts: all
+    tasks:
+      - name: 01- distribute the script.
+        copy:
+          src: '{{ item.src }}'
+          dest: '{{ item.dest }}'
+          owner: root
+          group: root
+        with_items:
+          - { src: /kubernetes_auto_install/script/kernel_upgrade.sh, dest: /k8s_install/scripts/ }
+          - { src: /kubernetes_auto_install/ansible_playbook/repo/kubernetes.repo, dest: /etc/yum.repos.d }
+      - name: 02- execute repo.sh script.
+        script: "/kubernetes_auto_install/ansible_playbook/scripts/repo.sh"
+      - name: 03- install software.
+        yum:
+          name: "{{ packages }}"
+        vars:
+          packages:
+            - nc
+            - telnet
+            - net-tools
+            - wget
+            - lsof
+            - vim
+            - lrzsz
+            - jq
+            - bash-completion
+            - zip
+            - unzip
+            - epel-release
+            - tree
+            - ntpdate
+            - gcc
+            - gcc-c++
+            - make
+            - cmake
+            - yum-utils
+            - device-mapper-persistent-data
+            - lvm2
+            - ipset
+            - ipvsadm
+      - name: 04- execute user_create.sh
+        script: "/kubernetes_auto_install/ansible_playbook/scripts/user_create.sh"
+      - name: 05- execute os_init.sh script.
+        script: "/kubernetes_auto_install/ansible_playbook/scripts/os_init.sh"
+      - name: 06- execute install_ipvs.sh script.
+        script: "/kubernetes_auto_install/ansible_playbook/scripts/install_ipvs.sh"
+      - name: 07- execute install_docker.sh script.
+        script: "/kubernetes_auto_install/ansible_playbook/scripts/install_docker.sh"
+      - name: 08- install kubelet kubeadm kubectl.
+        yum:
+          name: "{{ package }}"
+        vars:
+          package:
+            - kubelet-1.22.3
+            - kubeadm-1.22.3
+            - kubectl-1.22.3
+      - name: 09- start kubelet.
+        command: "sudo systemctl enable --now kubelet"
