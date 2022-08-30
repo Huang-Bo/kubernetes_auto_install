@@ -1,7 +1,7 @@
 ####################################################
 ### Description: Kubernetes Auto Install Scripts.###
 ### Auther: Huang-Bo                             ###
-### Email: 17521365211@163.com                   ###
+### Email: haunbo@163.com                   ###
 ### Blog: https://blog.csdn.net/Habo_            ###
 ### Create Date: 2022-07-13                      ###
 ####################################################
