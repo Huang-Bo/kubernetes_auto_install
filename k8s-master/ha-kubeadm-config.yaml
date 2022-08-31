@@ -22,6 +22,7 @@ apiServer:
 apiVersion: kubeadm.k8s.io/v1beta3
 certificatesDir: /etc/kubernetes/pki
 clusterName: k8s-test
+controlPlaneEndpoint: "192.168.1.222:6444"
 controllerManager: {}
 dns: {}
 etcd:

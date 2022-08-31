@@ -2,7 +2,7 @@
 ####################################################
 ### Description: Kubernetes Auto Install Scripts.###
 ### Auther: Huang-Bo                             ###
-### Email: 17521365211@163.com                   ###
+### Email: haunbo@163.com                        ###
 ### Blog: https://blog.csdn.net/Habo_            ###
 ### Create Date: 2022-07-13                      ###
 ####################################################
@@ -114,15 +114,9 @@ yum -y install epel-release ansible
 cat >>/etc/ansible/hosts <<EOF
 [k8s_master]
 192.168.1.200
-[k8s_slave]
-192.168.1.201
-192.168.1.202
 [k8s_nodes]
 192.168.1.101
 192.168.1.102
-192.168.1.103
-192.168.1.201
-192.168.1.202
 EOF
 #********************************************************************************************
 # 可选操作，默认ansible远程用户为root用户                                                    ***
@@ -159,13 +153,22 @@ function usage() {
   echo "  install                $(gettext 'Install kubernetes ')"
   echo "  pull                   $(gettext 'Pull the image required by the kubernetes cluster ')"
   echo "  guide                  $(gettext 'Boot kubernetes cluster ')"
+  echo "  guides                 $(gettext 'Boot HA kubernetes cluster ')"
   echo "  kubesk                 $(gettext 'issue certificates individually ')"
   echo "  master_join            $(gettext 'The master node joins the cluster ')"
   echo "  worker_join            $(gettext 'Worker nodes join the cluster ')"
+  echo "  worker_joins           $(gettext 'Worker nodes join the  HA cluster ')"
   echo "  flannel                $(gettext 'install flannel plug-in ')"
   echo "  calico                 $(gettext 'install calico  plug-in ')"
   echo "  ingress                $(gettext 'install ingress plug-in ')"
   echo "  dashboard              $(gettext 'install dashboard plug-in ')"
+  echo
+  echo "Uninstall commands: "
+  echo "  remove-flannel         $(gettext 'uninstall flannel plug-in ')"
+  echo "  remove-calico          $(gettext 'uninstall calico  plug-in ')"
+  echo "  remove-ingress         $(gettext 'uninstall ingress plug-in ')"
+  echo "  remove-dashboard       $(gettext 'uninstall dashboard plug-in ')"
+  echo
   echo "Tips："
   echo "  Execution sequence     $(gettext 'Please execute the script in order ')"
 }
@@ -180,11 +183,8 @@ log_info "${LINE}"
 HOSTS_DIR="/kubernetes_auto_install/iplist.txt"
 cat >${HOSTS_DIR} <<EOF
 192.168.1.200 root redhat
-192.168.1.201 root redhat
-192.168.1.202 root redhat
 192.168.1.101 root redhat
 192.168.1.102 root redhat
-192.168.1.103 root redhat
 EOF
 
 # 判断密钥文件是否存在
@@ -237,10 +237,10 @@ log_info "${LINE}"
 log_info "set ha cluster."
 log_info "${LINE}"
 # 配置集群高可用
-SCRIPT_DIR="/kubernetes_auto_install/k8s-master/"
-bash ${SCRIPT_DIR}haproxy-k8s-master/start-haproxy.sh
-bash ${SCRIPT_DIR}keepalived-k8s-master/start-keepalived.sh
-ansible-playbook -v /kubernetes_auto_install/ansible_playbook/file/kubernetes_ha.yaml
+#SCRIPT_DIR="/kubernetes_auto_install/k8s-master/"
+#bash ${SCRIPT_DIR}haproxy-k8s-master/start-haproxy.sh
+#bash ${SCRIPT_DIR}keepalived-k8s-master/start-keepalived.sh
+#ansible-playbook -v /kubernetes_auto_install/ansible_playbook/file/kubernetes_ha.yaml
 }
 
 function pull_images()
@@ -262,7 +262,7 @@ for imageName in ${images[@]} ; do
 docker pull registry.aliyuncs.com/google_containers/$imageName
 done
 }
-
+# 引导单master节点集群
 function init_master()
 {
 # 使用kubeadm引导集群
@@ -270,6 +270,22 @@ log_info "${LINE}"
 log_info "init main master."
 log_info "${LINE}"
 if kubeadm init --config=/kubernetes_auto_install/k8s-master/kubeadm-config.yaml;then
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+   log_success "kubeadm init success"
+else
+   log_error "kubeadm init failed please check."
+fi
+}
+# 引导高可用集群
+function init_ha_master()
+{
+# 使用kubeadm引导集群
+log_info "${LINE}"
+log_info "init Multi master cluster."
+log_info "${LINE}"
+if kubeadm init --config=/kubernetes_auto_install/k8s-master/ha-kubeadm-config.yaml;then
    mkdir -p $HOME/.kube
    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -341,16 +357,16 @@ else
    log_error "k8s-master03 join cluster failed."
 fi
 }
-
-function node_join_cluster () 
+# 加入多mater节点集群
+function node_join_clusters () 
 {
 TOKEN=$(kubeadm token list | awk 'END{print $1}')
 HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
 log_info "${LINE1}"
-log_info "node join cluster."
+log_info "node join Multi master cluster."
 log_info "${LINE1}"
 # k8s-node01 join cluster.
-if ssh root@k8s-node01 "kubeadm join 192.168.1.222:6444 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
+if ssh root@k8s-node01 "kubeadm join 192.168.1.222:6444--token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
    log_success "k8s-node01 Node has successfully joined the cluster" 
 else
    log_error "k8s-node01 Node has falied joined the cluster"
@@ -361,14 +377,43 @@ if ssh root@k8s-node02 "kubeadm join 192.168.1.222:6444 --token ${TOKEN} --disco
 else
    log_error "k8s-node02 Node has falied joined the cluster"
 fi
-# k8s-node03 join cluster.
+k8s-node03 join cluster.
 if ssh root@k8s-node03 "kubeadm join 192.168.1.222:6444 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
-   log_success "k8s-node03 Node has successfully joined the cluster" 
+  log_success "k8s-node03 Node has successfully joined the cluster" 
 else
-   log_error "k8s-node03 Node has falied joined the cluster"
+  log_error "k8s-node03 Node has falied joined the cluster"
 fi
 }
 
+# 加入单master节点集群
+function node_join_cluster () 
+{
+TOKEN=$(kubeadm token list | awk 'END{print $1}')
+HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
+log_info "${LINE1}"
+log_info "node join Single master cluster."
+log_info "${LINE1}"
+# k8s-node01 join cluster.
+if ssh root@k8s-node01 "kubeadm join 192.168.1.200:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
+   log_success "k8s-node01 Node has successfully joined the cluster" 
+else
+   log_error "k8s-node01 Node has falied joined the cluster"
+fi
+# k8s-node02 join cluster.
+if ssh root@k8s-node02 "kubeadm join 192.168.1.200:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
+   log_success "k8s-node02 Node has successfully joined the cluster" 
+else
+   log_error "k8s-node02 Node has falied joined the cluster"
+fi
+k8s-node03 join cluster.
+if ssh root@k8s-node03 "kubeadm join 192.168.1.200:6443 --token ${TOKEN} --discovery-token-ca-cert-hash sha256:${HASH}";then
+  log_success "k8s-node03 Node has successfully joined the cluster" 
+else
+  log_error "k8s-node03 Node has falied joined the cluster"
+fi
+}
+
+# 安装集群常用组件
 function flannel_install()
 {
 kubectl apply -f /kubernetes_auto_install/k8s-master/plugins/flannel/kube-flannel.yml
@@ -384,6 +429,24 @@ kubectl apply -f /kubernetes_auto_install/k8s-master/plugins/ingress/deploy.yaml
 function dashboard_install()
 {
 kubectl apply -f /kubernetes_auto_install/k8s-master/plugins/dashboard/recommended.yaml
+}
+
+# 卸载集群组件
+function flannel_uninstall()
+{
+kubectl delete -f /kubernetes_auto_install/k8s-master/plugins/flannel/kube-flannel.yml
+}
+function calico_uninstall()
+{
+kubectl delete -f /kubernetes_auto_install/k8s-master/plugins/calico/calico.yaml
+}
+function ingress_uninstall()
+{
+kubectl delete -f /kubernetes_auto_install/k8s-master/plugins/ingress/deploy.yaml
+}
+function dashboard_uninstall()
+{
+kubectl delete -f /kubernetes_auto_install/k8s-master/plugins/dashboard/recommended.yaml
 }
 
 
@@ -407,6 +470,9 @@ else
   guide)
     init_master
     ;;
+  guides)
+    init_ha_master
+    ;;
   kubesk)
     kube_secret_key
     ;;
@@ -415,6 +481,9 @@ else
     ;;
   worker_join)
     node_join_cluster
+    ;;
+  worker_joins)
+    node_join_clusters
     ;;
   flannel)
     flannel_install
@@ -427,7 +496,19 @@ else
     ;;
   dashboard)
     dashboard_install
-    ;;        
+    ;;     
+  remove-flannel)
+    flannel_uninstall
+    ;;
+  remove-calico)
+    calico_uninstall
+    ;;
+  remove-ingress)
+    ingress_uninstall
+    ;;
+  remove-dashboard)
+    dashboard_uninstall
+    ;;         
   *)
     echo "No such command: ${action}"
     usage

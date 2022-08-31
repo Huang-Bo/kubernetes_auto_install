@@ -1,6 +1,3 @@
 192.168.1.200 root redhat
-192.168.1.201 root redhat
-192.168.1.202 root redhat
 192.168.1.101 root redhat
 192.168.1.102 root redhat
-192.168.1.103 root redhat
